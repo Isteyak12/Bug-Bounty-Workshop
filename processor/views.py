@@ -64,7 +64,7 @@ def gallery_view(request):
         after_id = request.GET.get("after")
         per_page = 12
         if after_id:
-            uploads = uploads.filter(pk__lte=int(after_id)).order_by("-pk")[:per_page]
+            uploads = uploads.filter(pk__lt=int(after_id)).order_by("-pk")[:per_page]
         else:
             uploads = uploads.order_by("-pk")[:per_page]
 
@@ -113,11 +113,16 @@ def preset_create_view(request):
                 "dot_spacing": form.cleaned_data["dot_spacing"],
                 "style": form.cleaned_data["style"],
             }
+            preset.is_default = form.cleaned_data["is_default"]
             try:
                 validate_preset_config(preset.config)
             except ValidationError as e:
                 form.add_error(None, e.message)
                 return render(request, "processor/preset_create.html", {"form": form})
+            if preset.is_default:
+                Preset.objects.filter(user=request.user, is_default=True).update(
+                    is_default=False
+                )
             preset.save()
             return redirect("preset_list")
     else:
@@ -157,10 +162,11 @@ def batch_upload_view(request):
 
             batch = BatchJob.objects.create(
                 user=request.user,
-                total_images=len(files),
+                total_images=0,
                 status="pending",
             )
 
+            valid_uploads = 0
             for f in files:
                 try:
                     upload = ImageUpload(
@@ -171,9 +177,18 @@ def batch_upload_view(request):
                         is_public=make_public,
                     )
                     upload.save()
+                    valid_uploads += 1
                 except Exception:
                     continue  # Skip invalid files silently
 
+            batch.total_images = valid_uploads
+            if valid_uploads == 0:
+                batch.status = "failed"
+                batch.save(update_fields=["total_images", "status"])
+                form.add_error("images", "No valid image files were uploaded.")
+                return render(request, "processor/batch_upload.html", {"form": form})
+
+            batch.save(update_fields=["total_images"])
             process_batch(batch.pk)
             return redirect("batch_status", batch_id=batch.pk)
     else:
@@ -184,15 +199,19 @@ def batch_upload_view(request):
 @login_required
 def batch_status_view(request, batch_id):
     batch = get_object_or_404(BatchJob, pk=batch_id, user=request.user)
+    progress = (
+        round(batch.processed_count / batch.total_images * 100)
+        if batch.total_images > 0
+        else 0
+    )
+    completed = batch.status in ("completed", "failed")
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse(
             {
                 "status": batch.status,
-                "progress": round(batch.processed_count / batch.total_images * 100)
-                if batch.total_images > 0
-                else 0,
-                "completed": batch.processed_count == batch.total_images,
+                "progress": progress,
+                "completed": completed,
             }
         )
 
@@ -200,5 +219,5 @@ def batch_status_view(request, batch_id):
     return render(
         request,
         "processor/batch_status.html",
-        {"batch": batch, "images": images},
+        {"batch": batch, "images": images, "progress": progress},
     )

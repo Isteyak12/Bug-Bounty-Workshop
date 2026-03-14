@@ -5,9 +5,9 @@
 
 <div id="batch-info">
     <p>Status: <strong id="status-text">{{ batch.status }}</strong></p>
-    <p>Progress: <span id="progress-text">{{ batch.processed_count }}</span> / {{ batch.total_images }}</p>
+    <p>Progress: <span id="progress-text">{{ progress }}%</span> ({{ batch.processed_count }} / {{ batch.total_images }})</p>
     <div class="progress-bar">
-        <div id="progress-fill" style="width: 0%"></div>
+        <div id="progress-fill" style="width: {{ progress }}%"></div>
     </div>
 </div>
 

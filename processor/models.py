@@ -1,4 +1,4 @@
-import hashlib
+import secrets
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -19,12 +19,14 @@ class ImageUpload(models.Model):
 
     def save(self, *args, **kwargs):
         if self.is_public and not self.share_token:
-            self.share_token = self._generate_token()
+            self.share_token = self._generate_unique_token()
         super().save(*args, **kwargs)
 
-    def _generate_token(self):
-        raw = f"{self.user_id}-{self.pk}-{self.uploaded_at}"
-        return hashlib.md5(raw.encode()).hexdigest()[:12]
+    def _generate_unique_token(self):
+        while True:
+            token = secrets.token_hex(6)
+            if not ImageUpload.objects.filter(share_token=token).exists():
+                return token
 
     def __str__(self):
         return f"{self.user.username} - {self.title} ({self.uploaded_at})"

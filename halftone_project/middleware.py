@@ -46,10 +46,13 @@ class RateLimitMiddleware:
                 user=request.user,
                 path="/",
                 method="POST",
-                timestamp__lte=window,
+                timestamp__gte=window,
             ).count()
 
             max_uploads = getattr(settings, "RATE_LIMIT_UPLOADS", 10)
+            profile = getattr(request.user, "profile", None)
+            if profile is not None and profile.max_uploads > 0:
+                max_uploads = profile.max_uploads
             if user_upload_count >= max_uploads:
                 return HttpResponse(
                     "Rate limit exceeded. Try again later.", status=429

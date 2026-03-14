@@ -31,8 +31,9 @@ def apply_halftone(input_path, output_path, dot_spacing=10, style="classic"):
                         count += 1
                 avg = total / count
 
-                intensity = avg / 255  # Normalize pixel intensity to 0-1 range
-                radius = max_radius * intensity
+                # Halftones need larger marks for darker regions.
+                darkness = 1 - (avg / 255)
+                radius = max_radius * darkness
 
                 if radius > 0.5:
                     center_x = x + dot_spacing // 2

@@ -31,3 +31,15 @@ class ProfileForm(forms.ModelForm):
     class Meta:
         model = UserProfile
         fields = ["dot_spacing", "style", "max_uploads"]
+
+    def clean_dot_spacing(self):
+        value = self.cleaned_data["dot_spacing"]
+        if value < 1:
+            raise forms.ValidationError("Dot spacing must be at least 1.")
+        return value
+
+    def clean_max_uploads(self):
+        value = self.cleaned_data["max_uploads"]
+        if value < 1:
+            raise forms.ValidationError("Max uploads must be at least 1.")
+        return value
