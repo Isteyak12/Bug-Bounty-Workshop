@@ -63,10 +63,19 @@ def gallery_view(request):
         # AJAX infinite scroll — cursor-based pagination
         after_id = request.GET.get("after")
         per_page = 12
+        uploads_qs = uploads.order_by("-pk")
+
         if after_id:
-            uploads = uploads.filter(pk__lt=int(after_id)).order_by("-pk")[:per_page]
-        else:
-            uploads = uploads.order_by("-pk")[:per_page]
+            try:
+                after_id_int = int(after_id)
+            except (TypeError, ValueError):
+                return JsonResponse({"results": [], "has_more": False}, status=400)
+            uploads_qs = uploads_qs.filter(pk__lt=after_id_int)
+
+        # Fetch one extra row to detect whether there are more results.
+        rows = list(uploads_qs[: per_page + 1])
+        uploads = rows[:per_page]
+        has_more = len(rows) > per_page
 
         data = [
             {
@@ -76,7 +85,7 @@ def gallery_view(request):
             }
             for u in uploads
         ]
-        return JsonResponse({"results": data, "has_more": len(data) == per_page})
+        return JsonResponse({"results": data, "has_more": has_more})
 
     # Normal path — standard page-based pagination
     paginator = Paginator(uploads, 12)
@@ -199,11 +208,14 @@ def batch_upload_view(request):
 @login_required
 def batch_status_view(request, batch_id):
     batch = get_object_or_404(BatchJob, pk=batch_id, user=request.user)
+    total_images = max(batch.total_images, 0)
+    processed_count = max(batch.processed_count, 0)
     progress = (
-        round(batch.processed_count / batch.total_images * 100)
-        if batch.total_images > 0
+        round(processed_count / total_images * 100)
+        if total_images > 0
         else 0
     )
+    progress = min(progress, 100)
     completed = batch.status in ("completed", "failed")
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
